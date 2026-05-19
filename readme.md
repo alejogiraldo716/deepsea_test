@@ -6,18 +6,24 @@ Raspberry Pi Zero W nodes.
 
 ---
 
-## Author
+## Table of Contents
 
-| Field       | Detail                          |
-|-------------|---------------------------------|
-| Author      | Alejandro Giraldo               |
-| Email       | alejo.giraldo716@gmail.com      |
-| Maintainer  | Alejandro  Giraldo              |
-| Project     | DeepSea Developments - Technical Assessment |
-
+1. [Architecture Overview](#1-architecture-overview)
+2. [Repository Structure](#2-repository-structure)
+3. [Development Environment](#3-development-environment)
+4. [Dependencies](#4-dependencies)
+5. [Build Instructions](#5-build-instructions)
+   - 5.1 [Provider - standard build](#51-provider---standard-build)
+   - 5.2 [Provider - debug build](#52-provider---debug-build)
+   - 5.3 [Full build (both components)](#53-full-build-both-components)
+6. [Run Instructions](#6-run-instructions)
+   - 6.1 [Session 1 - start the provider daemon](#61-session-1---start-the-provider-daemon)
+   - 6.2 [Session 2 - attach the dashboard](#62-session-2---attach-the-dashboard)
+7. [Author](#7-author)
 ---
 
-## Architecture Overview
+
+## 1. Architecture Overview
 
 The system consists of two independent processes communicating over
 the D-Bus System Bus:
@@ -43,7 +49,7 @@ terminal dashboard using raw ANSI escape codes.
 
 ---
 
-## Repository Structure
+## 2. Repository Structure
 
 ```
 deepsea-telemetry/
@@ -58,7 +64,7 @@ deepsea-telemetry/
 
 ---
 
-## Development Environment
+## 3. Development Environment
 
 This project was developed and tested on the following environment before
 being deployed to the target hardware:
@@ -73,7 +79,7 @@ being deployed to the target hardware:
 
 ---
 
-## Dependencies
+## 4. Dependencies
 
 Install the following packages on the target system before building:
 
@@ -84,9 +90,9 @@ sudo apt install -y gcc libglib2.0-dev dbus pkg-config make
 
 ---
 
-## Build Instructions
+## 5. Build Instructions
 
-### 1. Provider - standard build
+### 5.1 Provider - standard build
 
 ```bash
 cd src/
@@ -101,7 +107,7 @@ Provider running - emitting signals on com.deepsea.Telemetry
 The provider will run indefinitely, emitting D-Bus signals at the target rate.
 Stop it with `Ctrl + C`.
 
-### 2. Provider - debug build
+### 5.2 Provider - debug build
 
 To enable verbose signal emission output, compile with the `debug` target:
 
@@ -121,7 +127,8 @@ Debug output is printed every 100 signals. This mode is intended for
 development verification only and must not be used in production, as the
 additional I/O will affect sampling timing.
 
-### Full build (both components)
+### 5.3 Full build (both components)
+
 ```bash
 cd src/
 make
@@ -138,12 +145,12 @@ make clean
 
 ---
 
-## Run Instructions
+## 6. Run Instructions
 
 Two separate terminal sessions are required, one for each component. Both must
 share the same D-Bus System Bus on the target machine.
 
-### Session 1 - start the provider daemon
+### 6.1 Session 1 - start the provider daemon
 
 ```bash
 ./telemetry_provider_daemon
@@ -154,7 +161,7 @@ Expected output:
 Provider running - emitting signals on com.deepsea.Telemetry
 ```
 
-### Session 2 - attach the dashboard
+### 6.2 Session 2 - attach the dashboard
 
 ```bash
 ./diagnostic_dashboard_client
@@ -183,5 +190,16 @@ Stop either component with `Ctrl + C`.
 > Note: Temperature will read `-1.00` on systems without a hardware thermal
 > sensor (WSL2, virtual machines). On the Raspberry Pi Zero W the correct
 > SoC temperature will be reported.
+
+---
+
+## 7. Author
+
+| Field       | Detail                          |
+|-------------|---------------------------------|
+| Author      | Alejandro Giraldo               |
+| Email       | alejo.giraldo716@gmail.com      |
+| Maintainer  | Alejandro  Giraldo              |
+| Project     | DeepSea Developments - Technical Assessment |
 
 ---
