@@ -86,39 +86,42 @@ sudo apt install -y gcc libglib2.0-dev dbus pkg-config make
 
 ## Build Instructions
 
-### Current state - provider only (no D-Bus yet)
-
-The provider can be compiled and verified independently without GLib,
-using only the standard C toolchain:
+### 1. Provider - standard build
 
 ```bash
 cd src/
-gcc -std=c11 -Wall -Wextra -o telemetry_provider_daemon telemetry_provider_daemon.c
-```
-
-Run it to verify hardware readers and timing:
-
-```bash
+make
 ./telemetry_provider_daemon
 ```
 
 Expected output:
+```bash
+Provider running - emitting signals on com.deepsea.Telemetry
 ```
-Telemetry Provider Daemon - starting...
-CPU  : 0.47%
-RAM  : 10.15%
-Temp : -1.00 C
-Elapsed : 100.341 ms
+The provider will run indefinitely, emitting D-Bus signals at the target rate.
+Stop it with `Ctrl + C`.
+
+### 2. Provider - debug build
+
+To enable verbose signal emission output, compile with the `debug` target:
+
+```bash
+make debug
+./telemetry_provider_daemon
 ```
 
-> Note: Temperature will read `-1.00` on systems without a hardware thermal
-> sensor (WSL2, virtual machines). On the Raspberry Pi Zero W the correct
-> SoC temperature will be reported.
+Expected output:
+```bash
+Provider running - emitting signals on com.deepsea.Telemetry
+Emitted 100 signals
+Emitted 200 signals
+Emitted 300 signals
+```
+Debug output is printed every 100 signals. This mode is intended for
+development verification only and must not be used in production, as the
+additional I/O will affect sampling timing.
 
-### Full build (both components - D-Bus required)
-
-Once D-Bus integration is complete, both components are built with:
-
+### Full build (both components)
 ```bash
 cd src/
 make

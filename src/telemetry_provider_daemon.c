@@ -14,12 +14,22 @@
 #include <stdint.h>
 #include <time.h>
 #include <unistd.h>
+#include <gio/gio.h>
+#include <glib.h>
 
 /* ── D-Bus constants ─────────────────────────────────────────────────── */
 #define DBUS_BUS_NAME "com.deepsea.TelemetryProvider"
 #define DBUS_OBJECT_PATH "/com/deepsea/Telemetry"
 #define DBUS_INTERFACE "com.deepsea.Telemetry"
 #define DBUS_SIGNAL_NAME "MetricsBroadcast"
+
+/* ── Debug configuration ─────────────────────────────────────────────── */
+/* Pass -DDEBUG_ENABLED to gcc/make to enable verbose output             */
+#ifdef DEBUG_ENABLED
+#define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#else
+#define DEBUG_PRINT(fmt, ...) /* disabled */
+#endif
 
 /* ── Sampling configuration ──────────────────────────────────────────── */
 /*
@@ -127,7 +137,11 @@ static double read_temperature(void)
         return -1.0;
 
     int raw = 0;
-    fscanf(fp, "%d", &raw);
+    if (fscanf(fp, "%d", &raw) != 1)
+    {
+        fclose(fp);
+        return -1.0;
+    }
     fclose(fp);
     return (double)raw / 1000.0;
 }
@@ -144,38 +158,113 @@ static int64_t now_ns(void)
     return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
+/**
+ * @brief Sleep for the remaining time in the current period.
+ * @param period_ns  Desired period in nanoseconds.
+ * @param start_ns   Timestamp at the start of this period.
+ */
+static void sleep_remainder(long period_ns, int64_t start_ns)
+{
+    int64_t elapsed = now_ns() - start_ns;
+    long remaining = (long)(period_ns - elapsed);
+    if (remaining > 0)
+    {
+        struct timespec ts = {
+            .tv_sec = remaining / 1000000000L,
+            .tv_nsec = remaining % 1000000000L};
+        nanosleep(&ts, NULL);
+    }
+}
+
 /* ── Main ────────────────────────────────────────────────────────────── */
 
 int main(void)
 {
-    printf("Telemetry Provider Daemon — starting...\n");
+    GError *error = NULL;         /* GLib error container, populated on failed API calls */
+    GDBusConnection *conn = NULL; /* handle to the D-Bus System Bus connection */
 
-    int64_t t0 = now_ns();
-
-    cpu_stat_t prev_stat, curr_stat;
-    if (read_cpu_stat(&prev_stat) != 0)
+    /* Acquire a connection to the System Bus shared by all system services */
+    conn = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+    if (!conn)
     {
-        fprintf(stderr, "Cannot read /proc/stat\n");
+        g_printerr("D-Bus connection failed: %s\n", error->message);
+        g_error_free(error);
         return EXIT_FAILURE;
     }
 
-    /* Small delay so the first delta is meaningful */
-    struct timespec ts = {.tv_sec = 0, .tv_nsec = 100000000L};
+    /* Register a well-known bus name so the dashboard can locate this provider */
+    guint owner_id = g_bus_own_name_on_connection(
+        conn,
+        DBUS_BUS_NAME,
+        G_BUS_NAME_OWNER_FLAGS_NONE,
+        NULL, NULL, NULL, NULL);
+
+    g_print("Provider running - emitting signals on %s\n", DBUS_INTERFACE);
+
+    cpu_stat_t prev_stat, curr_stat;
+
+    /* First snapshot - used as the baseline for the first CPU delta */
+    if (read_cpu_stat(&prev_stat) != 0)
+    {
+        g_printerr("Cannot read /proc/stat\n");
+        return EXIT_FAILURE;
+    }
+
+    /* Brief delay to allow a meaningful delta between the first two snapshots */
+    struct timespec ts = {.tv_sec = 0, .tv_nsec = 10000000L};
     nanosleep(&ts, NULL);
 
-    read_cpu_stat(&curr_stat);
-    double cpu_pct = calc_cpu_usage(&prev_stat, &curr_stat);
-    double ram_pct = read_ram_usage();
-    double temp_c = read_temperature();
+    uint64_t seq = 0; /* monotonically increasing sequence number for drop detection */
 
-    int64_t elapsed = now_ns() - t0;
+    while (1)
+    {
+        int64_t frame_start = now_ns(); /* mark the start of this sampling frame */
 
-    printf("CPU  : %.2f%%\n", cpu_pct);
-    printf("RAM  : %.2f%%\n", ram_pct);
-    printf("Temp : %.2f °C\n", temp_c);
-    printf("Elapsed : %.3f ms\n", (double)elapsed / 1000000.0);
+        read_cpu_stat(&curr_stat);
+        double cpu_pct = calc_cpu_usage(&prev_stat, &curr_stat);
+        double ram_pct = read_ram_usage();
+        double temp_c = read_temperature();
+        int64_t emit_ts = now_ns(); /* timestamp just before emission for latency measurement */
 
-    /* TODO: connect to D-Bus System Bus and start sampling loop */
+        prev_stat = curr_stat; /* roll current snapshot into previous for next iteration */
 
+        /* Pack all metrics into a GVariant tuple and broadcast as a D-Bus signal */
+        GVariant *payload = g_variant_new("(tddddx)",
+                                          seq,
+                                          cpu_pct,
+                                          ram_pct,
+                                          temp_c,
+                                          (gdouble)emit_ts, /* reserved slot, kept for ABI stability */
+                                          emit_ts);
+
+        gboolean ok = g_dbus_connection_emit_signal(
+            conn,
+            NULL, /* NULL = broadcast to all connected listeners */
+            DBUS_OBJECT_PATH,
+            DBUS_INTERFACE,
+            DBUS_SIGNAL_NAME,
+            payload,
+            &error);
+
+        if (!ok)
+        {
+            g_printerr("Signal emit error: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+        }
+
+        seq++;
+
+#ifdef DEBUG_ENABLED
+        if (seq % 100 == 0)
+            DEBUG_PRINT("Emitted %lu signals\n", (unsigned long)seq);
+#endif
+
+        /* Pace the loop to the target period, accounting for elapsed processing time */
+        sleep_remainder(SAMPLE_PERIOD_NS, frame_start);
+    }
+
+    g_bus_unown_name(owner_id);
+    g_object_unref(conn);
     return EXIT_SUCCESS;
 }
