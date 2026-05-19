@@ -1,0 +1,19 @@
+# Compiled binaries
+src/diagnostic_dashboard_client
+src/diagnostic_dashboard_server
+
+# Object files
+*.o
+*.a
+
+# Build artifacts
+*.out
+
+# Editor artifacts
+.vscode/
+*.swp
+*.swo
+
+# OS artifacts
+.DS_Store
+Thumbs.db
