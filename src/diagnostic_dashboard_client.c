@@ -208,16 +208,101 @@ static void render_dashboard(void)
     fflush(stdout);
 }
 
+/* ── D-Bus signal callback ───────────────────────────────────────────── */
+/**
+ * @brief GDBus signal handler — invoked for every MetricsBroadcast signal.
+ *
+ * Unpacks the GVariant payload, updates the global metrics snapshot, and
+ * computes latency and drop statistics.
+ */
+static void on_signal(GDBusConnection *conn,
+                      const gchar *sender,
+                      const gchar *object_path,
+                      const gchar *interface_name,
+                      const gchar *signal_name,
+                      GVariant *parameters,
+                      gpointer user_data)
+{
+    (void)conn;
+    (void)sender;
+    (void)object_path;
+    (void)interface_name;
+    (void)signal_name;
+    (void)user_data;
+
+    guint64 seq;
+    gdouble cpu_pct, ram_pct, temp_c, unused;
+    gint64 emit_ts;
+
+    g_variant_get(parameters, "(tddddx)",
+                  &seq, &cpu_pct, &ram_pct, &temp_c, &unused, &emit_ts);
+
+    int64_t recv_ts = now_ns();
+    double lat_us = (double)(recv_ts - (int64_t)emit_ts) / 1000.0;
+
+    /* Update snapshot */
+    g_metrics.cpu_pct = cpu_pct;
+    g_metrics.ram_pct = ram_pct;
+    g_metrics.temp_c = temp_c;
+    g_metrics.latency_us = lat_us;
+
+    if (lat_us > g_metrics.max_latency_us)
+        g_metrics.max_latency_us = lat_us;
+
+    /* Drop detection */
+    if (!g_metrics.first_sample)
+    {
+        uint64_t expected = g_metrics.last_seq + 1;
+        if (seq > expected)
+            g_metrics.total_dropped += seq - expected;
+    }
+    g_metrics.first_sample = 0;
+    g_metrics.last_seq = seq;
+    g_metrics.total_received++;
+}
+
 int main(void)
 {
+    GError *error = NULL;
+    GDBusConnection *conn = NULL;
+
+    conn = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+    if (!conn)
+    {
+        g_printerr("D-Bus connection failed: %s\n", error->message);
+        g_error_free(error);
+        return EXIT_FAILURE;
+    }
+
+    g_dbus_connection_signal_subscribe(
+        conn,
+        NULL,
+        DBUS_INTERFACE,
+        DBUS_SIGNAL_NAME,
+        DBUS_OBJECT_PATH,
+        NULL,
+        G_DBUS_SIGNAL_FLAGS_NONE,
+        on_signal,
+        NULL,
+        NULL);
+
     printf(ANSI_CLEAR ANSI_HOME);
-    int64_t t0 = now_ns();
-    printf("Monotonic clock    : %ld ns\n", (long)t0);
+    render_dashboard(); // Initial render with empty data before signals arrive
 
-    render_dashboard();
+    g_print("Dashboard subscribed — waiting for one signal (test mode)...\n");
+    /* TODO: replace this temporary implementation loop with a proper Glib main loop driven by a render timer.
+     * Single iteration of GLib main context to receive one signal
+     */
+    GMainContext *ctx = g_main_context_default();
+    for (int i = 0; i < 100; i++)
+    {
+        g_main_context_iteration(ctx, FALSE);
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = 10000000L};
+        nanosleep(&ts, NULL);
+    }
 
-    /* TODO: add D-Bus subscription and signal handler */
-    /* TODO: start GLib main loop                     */
+    render_dashboard(); // Final render showing updated metrics from the received signal
 
+    g_object_unref(conn);
     return EXIT_SUCCESS;
 }
