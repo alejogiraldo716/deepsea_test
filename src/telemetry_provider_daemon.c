@@ -6,8 +6,6 @@
  * pseudo-filesystem, then emits them as a D-Bus signal on the System Bus at the
  * highest achievable rate toward the 2 kHz target.
  */
-// #define _POSIX_C_SOURCE 200809L // for nanosleep and clock_gettime
-
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -174,8 +172,7 @@ int main(void)
 
     printf("CPU  : %.2f%%\n", cpu_pct);
     printf("RAM  : %.2f%%\n", ram_pct);
-    printf("Temp : %.2f C (%.2f if -1.0 means no thermal sensor)\n",
-           temp_c, temp_c);
+    printf("Temp : %.2f °C\n", temp_c);
     printf("Elapsed : %.3f ms\n", (double)elapsed / 1000000.0);
 
     /* TODO: connect to D-Bus System Bus and start sampling loop */
