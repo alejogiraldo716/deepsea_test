@@ -8,6 +8,7 @@ Raspberry Pi Zero W nodes.
 
 ## Table of Contents
 
+0. [Engineering Decisions and Constraints](#0-engineering-decisions-and-constraints)
 1. [Architecture Overview](#1-architecture-overview)
 2. [Repository Structure](#2-repository-structure)
 3. [Development Environment](#3-development-environment)
@@ -20,6 +21,59 @@ Raspberry Pi Zero W nodes.
    - 6.1 [Session 1 - start the provider daemon](#61-session-1---start-the-provider-daemon)
    - 6.2 [Session 2 - attach the dashboard](#62-session-2---attach-the-dashboard)
 7. [Author](#7-author)
+---
+
+## 0. Engineering Decisions and Constraints
+
+This section explains the key design choices behind the implementation and the
+trade-offs involved.
+
+### On the 2 kHz Sampling Target
+
+The customer requested **2,000 Hz** (one sample every 500 µs). This is what the
+provider attempts and what is actually achievable on this hardware.
+
+| Component | Requested | Attempted | Realistic on Pi Zero W |
+|---|---|---|---|
+| Provider - signal emission | 2,000 Hz | 2,000 Hz (loop paced to 500 µs) | ~300–500 Hz |
+| Dashboard - signal reception | follows provider | receives every signal | matches provider |
+| Dashboard - screen redraw | not specified | 10 Hz | 10 Hz |
+
+**Why the provider attempts 2 kHz but cannot reach it**
+
+The loop is paced to 500 µs, but each D-Bus signal emission costs roughly
+1–3 ms on this hardware. The code asks the bus to go faster than the bus
+physically can, so the real emission rate settles around 300–500 Hz. The
+dashboard exposes this real rate through its latency profiler, giving the
+customer evidence-based performance data.
+
+**Why D-Bus cannot reach 2 kHz on a Pi Zero W**
+
+- **Severe CPU bottleneck**: the Pi Zero W is a single-core ARMv6 at 1 GHz.
+  At 2 kHz, the CPU has only 500 µs to complete the full round-trip of each
+  sample, which is not feasible alongside other gateway services.
+- **The "middleman" tax**: D-Bus routes every message through the central
+  `dbus-daemon`. A signal travels Process A → Daemon → Process B, doubling
+  context switches, memory copies, and serialization.
+- **CPU spikes and jitter**: forcing D-Bus to this rate pushes CPU usage to
+  100%, producing latency spikes and dropped messages - the opposite of
+  what a diagnostic pipeline should do.
+
+**Why the dashboard redraws at 10 Hz instead of matching the provider**
+
+The dashboard receives every signal the provider emits and updates its
+internal metrics on each one. The screen redraw, however, runs at 10 Hz
+because the human eye cannot distinguish faster updates and redrawing
+hundreds of times per second would waste CPU on a resource-constrained
+gateway. Internal data fidelity is full; only the visual refresh is
+throttled.
+
+**What true 2 kHz would require**
+
+A POSIX shared-memory ring buffer with `eventfd` notifications for the hot
+path, keeping D-Bus only for control messages and lower-frequency telemetry.
+
+
 ---
 
 
