@@ -134,11 +134,25 @@ static double read_temperature(void)
     return (double)raw / 1000.0;
 }
 
+/* ── Time helpers ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Return current monotonic time as nanoseconds.
+ */
+static int64_t now_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
 /* ── Main ────────────────────────────────────────────────────────────── */
 
 int main(void)
 {
     printf("Telemetry Provider Daemon — starting...\n");
+
+    int64_t t0 = now_ns();
 
     cpu_stat_t prev_stat, curr_stat;
     if (read_cpu_stat(&prev_stat) != 0)
@@ -156,12 +170,15 @@ int main(void)
     double ram_pct = read_ram_usage();
     double temp_c = read_temperature();
 
+    int64_t elapsed = now_ns() - t0;
+
     printf("CPU  : %.2f%%\n", cpu_pct);
     printf("RAM  : %.2f%%\n", ram_pct);
     printf("Temp : %.2f C (%.2f if -1.0 means no thermal sensor)\n",
            temp_c, temp_c);
+    printf("Elapsed : %.3f ms\n", (double)elapsed / 1000000.0);
 
-    /* TODO: add time helpers and D-Bus integration */
+    /* TODO: connect to D-Bus System Bus and start sampling loop */
 
     return EXIT_SUCCESS;
 }
