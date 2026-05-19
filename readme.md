@@ -140,20 +140,48 @@ make clean
 
 ## Run Instructions
 
-Two separate terminal sessions are required.
+Two separate terminal sessions are required, one for each component. Both must
+share the same D-Bus System Bus on the target machine.
 
-**Session 1 - start the provider daemon:**
+### Session 1 - start the provider daemon
 
 ```bash
 ./telemetry_provider_daemon
 ```
 
-**Session 2 - attach the dashboard:**
+Expected output:
+```
+Provider running - emitting signals on com.deepsea.Telemetry
+```
+
+### Session 2 - attach the dashboard
 
 ```bash
 ./diagnostic_dashboard_client
 ```
 
+The dashboard will render in place and update at 10 Hz with live metrics
+streamed from the provider. Example view:
+```
+╔══════════════════════════════════════════════════════╗
+║   DeepSea Developments - EV Charger Telemetry        ║
+╚══════════════════════════════════════════════════════╝
+CPU Usage   :   2.34%  #---------------------------------------
+RAM Usage   :  10.95%  ####------------------------------------
+Core Temp   :  47.20°C ###-------------------------------------
+──────────────────────────────────────────────────────
+Performance Matrix
+Current Latency : 200.94 µs
+Max Latency     : 1048.14 µs
+Messages Rx     : 18420
+Dropped/Missed  : 0
+──────────────────────────────────────────────────────
+```
+
+Stop either component with `Ctrl + C`.
+
+> Note: Temperature will read `-1.00` on systems without a hardware thermal
+> sensor (WSL2, virtual machines). On the Raspberry Pi Zero W the correct
+> SoC temperature will be reported.
+
 ---
-*Full build instructions, run guide, and architectural decisions will be
-documented as implementation progresses.*

@@ -261,11 +261,25 @@ static void on_signal(GDBusConnection *conn,
     g_metrics.total_received++;
 }
 
+/* ── Render timer callback ───────────────────────────────────────────── */
+
+/**
+ * @brief GLib timeout callback that triggers a dashboard redraw.
+ * @return G_SOURCE_CONTINUE to keep the timer alive.
+ */
+static gboolean on_render_tick(gpointer user_data)
+{
+    (void)user_data;
+    render_dashboard();
+    return G_SOURCE_CONTINUE;
+}
+
 int main(void)
 {
     GError *error = NULL;
     GDBusConnection *conn = NULL;
 
+    /* Acquire a connection to the System Bus shared by all system services */
     conn = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
     if (!conn)
     {
@@ -274,9 +288,10 @@ int main(void)
         return EXIT_FAILURE;
     }
 
+    /* Subscribe to MetricsBroadcast signals from any sender on the bus */
     g_dbus_connection_signal_subscribe(
         conn,
-        NULL,
+        NULL, /* any sender */
         DBUS_INTERFACE,
         DBUS_SIGNAL_NAME,
         DBUS_OBJECT_PATH,
@@ -286,23 +301,18 @@ int main(void)
         NULL,
         NULL);
 
+    /* Clear screen once at startup */
     printf(ANSI_CLEAR ANSI_HOME);
-    render_dashboard(); // Initial render with empty data before signals arrive
+    fflush(stdout);
 
-    g_print("Dashboard subscribed — waiting for one signal (test mode)...\n");
-    /* TODO: replace this temporary implementation loop with a proper Glib main loop driven by a render timer.
-     * Single iteration of GLib main context to receive one signal
-     */
-    GMainContext *ctx = g_main_context_default();
-    for (int i = 0; i < 100; i++)
-    {
-        g_main_context_iteration(ctx, FALSE);
-        struct timespec ts = {.tv_sec = 0, .tv_nsec = 10000000L};
-        nanosleep(&ts, NULL);
-    }
+    /* Attach a render timer to the default GLib main loop */
+    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+    g_timeout_add(RENDER_INTERVAL_MS, on_render_tick, NULL);
 
-    render_dashboard(); // Final render showing updated metrics from the received signal
+    g_print("Dashboard listening - waiting for telemetry...\n");
+    g_main_loop_run(loop);
 
+    g_main_loop_unref(loop);
     g_object_unref(conn);
     return EXIT_SUCCESS;
 }
