@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <time.h>
 #include <unistd.h>
 #include <gio/gio.h>
@@ -66,9 +67,10 @@ static int read_cpu_stat(cpu_stat_t *out)
     if (!fp)
         return -1;
 
-    int ret = fscanf(fp, "cpu  %lu %lu %lu %lu %lu %lu %lu",
+    int ret = fscanf(fp, "cpu  %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64,
                      &out->user, &out->nice, &out->system,
                      &out->idle, &out->iowait, &out->irq, &out->softirq);
+
     fclose(fp);
     return (ret == 7) ? 0 : -1;
 }
@@ -112,10 +114,11 @@ static double read_ram_usage(void)
 
     while (fgets(line, sizeof(line), fp))
     {
-        if (sscanf(line, "MemTotal: %lu kB", &mem_total) == 1)
+	if (sscanf(line, "MemTotal: %" SCNu64 " kB", &mem_total) == 1)
             continue;
-        if (sscanf(line, "MemAvailable: %lu kB", &mem_available) == 1)
+        if (sscanf(line, "MemAvailable: %" SCNu64 " kB", &mem_available) == 1)
             continue;
+
         if (mem_total && mem_available)
             break;
     }
