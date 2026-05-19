@@ -69,6 +69,19 @@ static metrics_t g_metrics __attribute__((unused)) = {
     .max_latency_us = 0.0,
 };
 
+/* ── Time helper ─────────────────────────────────────────────────────── */
+
+/**
+ * @brief Return current monotonic time in nanoseconds.
+ */
+static int64_t
+now_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
 int main(void)
 {
     printf("Diagnostic Dashboard Client — starting...\n");
@@ -76,9 +89,12 @@ int main(void)
     printf("Signal name        : %s\n", DBUS_SIGNAL_NAME);
     printf("Render interval    : %d ms\n", RENDER_INTERVAL_MS);
 
-    /* TODO: add time helper and rendering functions  */
-    /* TODO: add D-Bus subscription and signal handler */
-    /* TODO: start GLib main loop                     */
+    int64_t t0 = now_ns();
+    printf("Monotonic clock    : %ld ns\n", (long)t0);
+
+    /* TODO: add rendering functions               */
+    /* TODO: add D-Bus subscription and handler    */
+    /* TODO: start GLib main loop                  */
 
     return EXIT_SUCCESS;
 }
