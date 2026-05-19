@@ -1,6 +1,6 @@
 # Compiled binaries
 src/diagnostic_dashboard_client
-src/diagnostic_dashboard_server
+src/telemetry_provider_daemon
 
 # Object files
 *.o

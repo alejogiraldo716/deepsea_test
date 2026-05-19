@@ -6,6 +6,17 @@ Raspberry Pi Zero W nodes.
 
 ---
 
+## Author
+
+| Field       | Detail                          |
+|-------------|---------------------------------|
+| Author      | Alejandro Giraldo               |
+| Email       | alejo.giraldo716@gmail.com      |
+| Maintainer  | Alejandro  Giraldo              |
+| Project     | DeepSea Developments - Technical Assessment |
+
+---
+
 ## Architecture Overview
 
 The system consists of two independent processes communicating over
@@ -41,11 +52,108 @@ deepsea-telemetry/
 │   ├── telemetry_provider_daemon.c
 │   ├── diagnostic_dashboard_client.c
 │   └── Makefile
-└── README.md
+├── README.md
 └── .gitignore
 ```
 
 ---
 
+## Development Environment
+
+This project was developed and tested on the following environment before
+being deployed to the target hardware:
+
+| Field         | Detail                        |
+|---------------|-------------------------------|
+| Host OS       | Windows 11                    |
+| Linux layer   | WSL2 - Ubuntu 24.04           |
+| Compiler      | GCC 13.3.0                    |
+| Target board  | Raspberry Pi Zero W (ARMv6)   |
+| Target OS     | Raspberry Pi OS (Debian-based)|
+
+---
+
+## Dependencies
+
+Install the following packages on the target system before building:
+
+```bash
+sudo apt update
+sudo apt install -y gcc libglib2.0-dev dbus pkg-config make
+```
+
+---
+
+## Build Instructions
+
+### 1. Provider - standard build
+
+```bash
+cd src/
+make
+./telemetry_provider_daemon
+```
+
+Expected output:
+```bash
+Provider running - emitting signals on com.deepsea.Telemetry
+```
+The provider will run indefinitely, emitting D-Bus signals at the target rate.
+Stop it with `Ctrl + C`.
+
+### 2. Provider - debug build
+
+To enable verbose signal emission output, compile with the `debug` target:
+
+```bash
+make debug
+./telemetry_provider_daemon
+```
+
+Expected output:
+```bash
+Provider running - emitting signals on com.deepsea.Telemetry
+Emitted 100 signals
+Emitted 200 signals
+Emitted 300 signals
+```
+Debug output is printed every 100 signals. This mode is intended for
+development verification only and must not be used in production, as the
+additional I/O will affect sampling timing.
+
+### Full build (both components)
+```bash
+cd src/
+make
+```
+
+This produces two binaries: `telemetry_provider_daemon` and
+`diagnostic_dashboard_client`.
+
+To remove compiled binaries:
+
+```bash
+make clean
+```
+
+---
+
+## Run Instructions
+
+Two separate terminal sessions are required.
+
+**Session 1 - start the provider daemon:**
+
+```bash
+./telemetry_provider_daemon
+```
+
+**Session 2 - attach the dashboard:**
+
+```bash
+./diagnostic_dashboard_client
+```
+
+---
 *Full build instructions, run guide, and architectural decisions will be
 documented as implementation progresses.*
